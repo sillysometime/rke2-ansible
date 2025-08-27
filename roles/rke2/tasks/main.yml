@@ -1,3 +1,4 @@
+---
 - name: Create necessary directories
   file:
     path: "{{ item }}"
@@ -54,7 +55,7 @@
     src: /var/lib/rancher/rke2/server/node-token
     dest: /tmp/master-node-token
     flat: yes
-  delegate_to: master-01
+  delegate_to: "{{ groups['master'][0] }}"
   when: rke2_token == "" and "'worker' in group_names"
 
 - name: Set token variable for worker
@@ -127,4 +128,23 @@
     name: rke2-agent
     enabled: yes
     state: started
+  when: "'worker' in group_names"
+
+# ========================
+# Wait for services active
+# ========================
+- name: Wait for rke2-server to be active
+  command: systemctl is-active rke2-server
+  register: server_status
+  retries: 10
+  delay: 10
+  until: server_status.stdout == "active"
+  when: "'master' in group_names"
+
+- name: Wait for rke2-agent to be active
+  command: systemctl is-active rke2-agent
+  register: agent_status
+  retries: 10
+  delay: 10
+  until: agent_status.stdout == "active"
   when: "'worker' in group_names"
