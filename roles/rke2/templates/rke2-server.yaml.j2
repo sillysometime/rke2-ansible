@@ -1,0 +1,16 @@
+# RKE2 Server Configuration
+token: {{ rke2_token }}
+{% if rke2_server_config is defined %}
+{% for key, value in rke2_server_config.items() %}
+{% if value is string %}
+{{ key }}: {{ value }}
+{% elif value is sequence and value is not string %}
+{{ key }}:
+{% for item in value %}
+  - {{ item }}
+{% endfor %}
+{% else %}
+{{ key }}: {{ value }}
+{% endif %}
+{% endfor %}
+{% endif %}

@@ -1,0 +1,17 @@
+---
+# RKE2 Configuration
+rke2_version: "stable"
+rke2_channel: "stable"
+
+# Network Configuration
+rke2_cluster_cidr: "10.42.0.0/16"
+rke2_service_cidr: "10.43.0.0/16"
+rke2_cluster_dns: "10.43.0.10"
+
+# System Configuration
+system_timezone: "Asia/Bangkok"
+disable_swap: true
+configure_firewall: true
+
+# Token for cluster communication (change this!)
+rke2_token: "K10c7b65c72e78d54c15ee1eaf15c4g8a9c2a6f24c::server:4f9f2cc0286c58fc5bc8725c46da66c6"

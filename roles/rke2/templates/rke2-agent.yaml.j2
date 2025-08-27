@@ -1,0 +1,3 @@
+# RKE2 Agent Configuration
+server: {{ rke2_server_url }}
+token: {{ hostvars[groups['masters'][0]]['rke2_node_token'] | default(rke2_token) }}

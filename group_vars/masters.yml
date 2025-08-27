@@ -1,0 +1,10 @@
+---
+rke2_type: server
+rke2_server_config:
+  write-kubeconfig-mode: "0644"
+  tls-san:
+    - "{{ ansible_default_ipv4.address }}"
+    - "{{ ansible_hostname }}"
+  cluster-cidr: "{{ rke2_cluster_cidr }}"
+  service-cidr: "{{ rke2_service_cidr }}"
+  cluster-dns: "{{ rke2_cluster_dns }}"

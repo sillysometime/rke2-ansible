@@ -1,0 +1,74 @@
+---
+- name: Create RKE2 config directory
+  file:
+    path: /etc/rancher/rke2
+    state: directory
+    mode: '0755'
+
+- name: Generate RKE2 server config
+  template:
+    src: rke2-server.yaml.j2
+    dest: /etc/rancher/rke2/config.yaml
+    mode: '0600'
+  notify: restart rke2-server
+
+- name: Download RKE2 installation script
+  get_url:
+    url: https://get.rke2.io
+    dest: /tmp/install-rke2.sh
+    mode: '0755'
+
+- name: Install RKE2 server
+  shell: |
+    INSTALL_RKE2_CHANNEL={{ rke2_channel }} \
+    INSTALL_RKE2_TYPE=server \
+    /tmp/install-rke2.sh
+  args:
+    creates: /usr/local/bin/rke2
+
+- name: Enable and start RKE2 server
+  systemd:
+    name: rke2-server
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Wait for RKE2 server to be ready
+  wait_for:
+    path: /var/lib/rancher/rke2/server/node-token
+    timeout: 300
+
+- name: Create kubectl symlink
+  file:
+    src: /var/lib/rancher/rke2/bin/kubectl
+    dest: /usr/local/bin/kubectl
+    state: link
+
+- name: Create kubeconfig directory for root
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0755'
+
+- name: Copy kubeconfig for root
+  copy:
+    src: /etc/rancher/rke2/rke2.yaml
+    dest: /root/.kube/config
+    mode: '0600'
+    remote_src: yes
+
+- name: Read node token
+  slurp:
+    src: /var/lib/rancher/rke2/server/node-token
+  register: node_token_raw
+
+- name: Set node token fact
+  set_fact:
+    rke2_node_token: "{{ node_token_raw.content | b64decode | trim }}"
+
+- name: Display master node information
+  debug:
+    msg:
+      - "RKE2 Master installed successfully!"
+      - "Node token: {{ rke2_node_token }}"
+      - "Kubeconfig: /etc/rancher/rke2/rke2.yaml"

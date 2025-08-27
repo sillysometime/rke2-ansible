@@ -1,0 +1,38 @@
+---
+- name: Create RKE2 config directory
+  file:
+    path: /etc/rancher/rke2
+    state: directory
+    mode: '0755'
+
+- name: Generate RKE2 agent config
+  template:
+    src: rke2-agent.yaml.j2
+    dest: /etc/rancher/rke2/config.yaml
+    mode: '0600'
+  notify: restart rke2-agent
+
+- name: Download RKE2 installation script
+  get_url:
+    url: https://get.rke2.io
+    dest: /tmp/install-rke2.sh
+    mode: '0755'
+
+- name: Install RKE2 agent
+  shell: |
+    INSTALL_RKE2_CHANNEL={{ rke2_channel }} \
+    INSTALL_RKE2_TYPE=agent \
+    /tmp/install-rke2.sh
+  args:
+    creates: /usr/local/bin/rke2
+
+- name: Enable and start RKE2 agent
+  systemd:
+    name: rke2-agent
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Display worker node information
+  debug:
+    msg: "RKE2 Worker {{ inventory_hostname }} installed successfully!"
