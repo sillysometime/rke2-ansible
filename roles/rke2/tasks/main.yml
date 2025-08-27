@@ -1,19 +1,130 @@
----
-- name: Include prerequisites tasks
-  include_tasks: prerequisites.yml
+- name: Create necessary directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  loop:
+    - "{{ rke2_bin_dir }}"
+    - "{{ rke2_config_dir }}"
+    - "{{ rke2_data_dir }}"
+    - "{{ rke2_log_dir }}"
 
+- name: Download RKE2 installation script
+  get_url:
+    url: https://get.rke2.io
+    dest: /tmp/install-rke2.sh
+    mode: 0755
+
+# ========================
+# Install server or agent
+# ========================
 - name: Install RKE2 server (master)
-  include_tasks: install-master.yml
-  when: rke2_type == "server"
+  shell: |
+    INSTALL_RKE2_CHANNEL={{ rke2_channel }} \
+    INSTALL_RKE2_TYPE=server \
+    INSTALL_RKE2_VERSION={{ rke2_version }} \
+    INSTALL_RKE2_BIN_DIR={{ rke2_bin_dir }} \
+    INSTALL_RKE2_TAR_PREFIX={{ rke2_tar_prefix }} \
+    INSTALL_RKE2_SYSTEMD_DIR={{ rke2_systemd_dir }} \
+    /tmp/install-rke2.sh
+  args:
+    warn: false
+  when: "'master' in group_names"
 
 - name: Install RKE2 agent (worker)
-  include_tasks: install-worker.yml
-  when: rke2_type == "agent"
+  shell: |
+    INSTALL_RKE2_CHANNEL={{ rke2_channel }} \
+    INSTALL_RKE2_TYPE=agent \
+    INSTALL_RKE2_VERSION={{ rke2_version }} \
+    INSTALL_RKE2_BIN_DIR={{ rke2_bin_dir }} \
+    INSTALL_RKE2_TAR_PREFIX={{ rke2_tar_prefix }} \
+    INSTALL_RKE2_SYSTEMD_DIR={{ rke2_systemd_dir }} \
+    /tmp/install-rke2.sh
+  args:
+    warn: false
+  when: "'worker' in group_names"
 
-- name: Wait for RKE2 to be ready
-  wait_for:
-    port: "{{ '6443' if rke2_type == 'server' else '10250' }}"
-    host: "{{ ansible_default_ipv4.address }}"
-    delay: 30
-    timeout: 300
-  when: rke2_type in ['server', 'agent']
+# ========================
+# Handle token
+# ========================
+- name: Fetch token from master if not defined
+  fetch:
+    src: /var/lib/rancher/rke2/server/node-token
+    dest: /tmp/master-node-token
+    flat: yes
+  delegate_to: master-01
+  when: rke2_token == "" and "'worker' in group_names"
+
+- name: Set token variable for worker
+  set_fact:
+    rke2_token: "{{ lookup('file','/tmp/master-node-token') }}"
+  when: rke2_token == "" and "'worker' in group_names"
+
+# ========================
+# Deploy config
+# ========================
+- name: Deploy RKE2 config file
+  template:
+    src: config.yaml.j2
+    dest: "{{ rke2_config_dir }}/config.yaml"
+    owner: root
+    group: root
+    mode: 0600
+
+# ========================
+# Create systemd override
+# ========================
+- name: Create systemd override directory
+  file:
+    path: "{{ rke2_systemd_dir }}/{{ item }}.d"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  loop:
+    - rke2-server
+    - rke2-agent
+
+- name: Create systemd override file for master
+  copy:
+    dest: "{{ rke2_systemd_dir }}/rke2-server.d/override.conf"
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart={{ rke2_bin_dir }}/rke2 server --config {{ rke2_config_dir }}/config.yaml --data-dir {{ rke2_data_dir }}
+      StandardOutput=append:{{ rke2_log_dir }}/server.log
+      StandardError=append:{{ rke2_log_dir }}/server.log
+  when: "'master' in group_names"
+
+- name: Create systemd override file for worker
+  copy:
+    dest: "{{ rke2_systemd_dir }}/rke2-agent.d/override.conf"
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart={{ rke2_bin_dir }}/rke2 agent --config {{ rke2_config_dir }}/config.yaml --data-dir {{ rke2_data_dir }}
+      StandardOutput=append:{{ rke2_log_dir }}/agent.log
+      StandardError=append:{{ rke2_log_dir }}/agent.log
+  when: "'worker' in group_names"
+
+# ========================
+# Reload & enable services
+# ========================
+- name: Reload systemd
+  command: systemctl daemon-reload
+
+- name: Enable and start RKE2 server
+  systemd:
+    name: rke2-server
+    enabled: yes
+    state: started
+  when: "'master' in group_names"
+
+- name: Enable and start RKE2 agent
+  systemd:
+    name: rke2-agent
+    enabled: yes
+    state: started
+  when: "'worker' in group_names"

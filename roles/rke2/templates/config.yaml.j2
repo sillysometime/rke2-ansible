@@ -1,0 +1,8 @@
+token: {{ rke2_token }}
+node-name: {{ inventory_hostname }}
+data-dir: {{ rke2_data_dir }}
+cluster-cidr: {{ rke2_cluster_cidr }}
+service-cidr: {{ rke2_service_cidr }}
+cluster-dns: {{ rke2_cluster_dns }}
+tls-san:
+  - {{ inventory_hostname }}
