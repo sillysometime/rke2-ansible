@@ -1,0 +1,158 @@
+---
+- name: RKE2 Complete Cleanup
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Stop RKE2 services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - rke2-server
+        - rke2-agent
+      ignore_errors: yes
+
+    - name: Kill remaining RKE2 processes
+      shell: |
+        pkill -f rke2 || true
+        pkill -f containerd || true
+        pkill -f kubelet || true
+      ignore_errors: yes
+
+    - name: Remove RKE2 installation
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/bin/rke2
+        - /usr/local/bin/rke2-killall.sh
+        - /usr/local/bin/rke2-uninstall.sh
+        - /var/lib/rancher/rke2
+        - /etc/rancher/rke2
+        - /var/lib/kubelet
+        - /var/lib/cni
+        - /etc/cni
+        - /opt/cni
+        - /run/k3s
+        - /run/flannel
+
+    - name: Remove RKE2 systemd services
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/systemd/system/rke2-server.service
+        - /etc/systemd/system/rke2-agent.service
+        - /usr/local/lib/systemd/system/rke2-server.service
+        - /usr/local/lib/systemd/system/rke2-agent.service
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Remove kubectl symlinks
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/bin/kubectl
+        - /usr/local/bin/crictl
+        - /usr/local/bin/ctr
+
+    - name: Remove kubeconfig files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /root/.kube
+        - /home/*/.kube
+
+    - name: Clean container runtime leftovers
+      shell: |
+        # Remove containers
+        for container in $(crictl ps -aq 2>/dev/null || true); do
+          crictl rm -f $container 2>/dev/null || true
+        done
+        
+        # Remove pods
+        for pod in $(crictl pods -q 2>/dev/null || true); do
+          crictl rmp -f $pod 2>/dev/null || true
+        done
+        
+        # Remove images
+        for image in $(crictl images -q 2>/dev/null || true); do
+          crictl rmi $image 2>/dev/null || true
+        done
+      ignore_errors: yes
+
+    - name: Clean network interfaces
+      shell: |
+        # Remove flannel interfaces
+        ip link delete flannel.1 2>/dev/null || true
+        ip link delete cni0 2>/dev/null || true
+        
+        # Clean iptables rules (be careful!)
+        iptables -t nat -F 2>/dev/null || true
+        iptables -t mangle -F 2>/dev/null || true
+        iptables -F FORWARD 2>/dev/null || true
+        
+        # Remove custom chains (optional)
+        iptables -t nat -X 2>/dev/null || true
+        iptables -t mangle -X 2>/dev/null || true
+      ignore_errors: yes
+
+    - name: Unmount RKE2 filesystems
+      shell: |
+        # Unmount kubelet mounts
+        for mount in $(mount | grep '/var/lib/kubelet' | awk '{print $3}' | sort -r); do
+          umount -f $mount 2>/dev/null || true
+        done
+        
+        # Unmount container mounts
+        for mount in $(mount | grep '/run/containerd' | awk '{print $3}' | sort -r); do
+          umount -f $mount 2>/dev/null || true
+        done
+        
+        # Unmount tmpfs
+        for mount in $(mount | grep 'tmpfs.*rke2' | awk '{print $3}' | sort -r); do
+          umount -f $mount 2>/dev/null || true
+        done
+      ignore_errors: yes
+
+    - name: Remove kernel modules
+      shell: |
+        rmmod br_netfilter 2>/dev/null || true
+        rmmod overlay 2>/dev/null || true
+      ignore_errors: yes
+
+    - name: Clean package cache
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+
+    - name: Reboot nodes to ensure clean state
+      reboot:
+        reboot_timeout: 300
+        test_command: uptime
+
+    - name: Verify cleanup
+      shell: |
+        echo "=== Checking for remaining RKE2 processes ==="
+        ps aux | grep -i rke2 | grep -v grep || echo "No RKE2 processes found"
+        
+        echo "=== Checking for remaining network interfaces ==="
+        ip link show | grep -E "(flannel|cni)" || echo "No RKE2 network interfaces found"
+        
+        echo "=== Checking for remaining mounts ==="
+        mount | grep -E "(kubelet|containerd|rke2)" || echo "No RKE2 mounts found"
+        
+        echo "=== Cleanup verification completed ==="
+      register: cleanup_verification
+
+    - name: Display cleanup results
+      debug:
+        var: cleanup_verification.stdout_lines
