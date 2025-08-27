@@ -1,8 +1,9 @@
-token: {{ rke2_token }}
-node-name: {{ inventory_hostname }}
-data-dir: {{ rke2_data_dir }}
-cluster-cidr: {{ rke2_cluster_cidr }}
-service-cidr: {{ rke2_service_cidr }}
-cluster-dns: {{ rke2_cluster_dns }}
-tls-san:
-  - {{ inventory_hostname }}
+write-kubeconfig-mode: "0644"
+server: "{{ groups['master'][0] if 'worker' in group_names else '' }}"
+token: "{{ rke2_token }}"
+tls-san: []
+node-name: "{{ inventory_hostname }}"
+node-ip: "{{ ansible_default_ipv4.address }}"
+cluster-cidr: "{{ rke2_cluster_cidr }}"
+service-cidr: "{{ rke2_service_cidr }}"
+cluster-dns: "{{ rke2_cluster_dns }}"

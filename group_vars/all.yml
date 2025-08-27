@@ -20,9 +20,13 @@ rke2_data_dir: "/var/lib/rancher/rke2"
 rke2_log_dir: "/var/log/rke2"
 rke2_systemd_dir: "/etc/systemd/system"
 
-# Token (empty = fetch from master)
+# Token (leave empty = fetch from master)
 rke2_token: ""
 
 # Logging rotation
 rke2_log_maxsize: "50M"
 rke2_log_maxfiles: 5
+
+# TLS self-signed (optional)
+rke2_tls_enabled: false
+rke2_tls_cert_dir: "/etc/rancher/rke2/certs"

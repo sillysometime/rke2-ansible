@@ -3,11 +3,18 @@
   timezone:
     name: "{{ system_timezone }}"
 
-- name: Disable swap if requested
+- name: Disable swap immediately
   command: swapoff -a
   when: disable_swap
 
-- name: Configure firewall (firewalld)
+- name: Disable swap permanently
+  replace:
+    path: /etc/fstab
+    regexp: '(^.*swap.*$)'
+    replace: '# \1'
+  when: disable_swap
+
+- name: Ensure firewalld is enabled
   service:
     name: firewalld
     state: started
@@ -19,7 +26,6 @@
     state: enforcing
   when: enable_selinux
 
-# Create directories
 - name: Create RKE2 directories
   file:
     path: "{{ item }}"
@@ -32,15 +38,14 @@
     - "{{ rke2_config_dir }}"
     - "{{ rke2_data_dir }}"
     - "{{ rke2_log_dir }}"
+    - "{{ rke2_tls_cert_dir }}"
 
-# Download install script
 - name: Download RKE2 installation script
   get_url:
     url: https://get.rke2.io
     dest: /tmp/install-rke2.sh
     mode: 0755
 
-# Install server or agent
 - name: Install RKE2 server (master)
   shell: |
     INSTALL_RKE2_CHANNEL={{ rke2_channel }} \
@@ -51,7 +56,6 @@
     /tmp/install-rke2.sh
   args:
     creates: "{{ rke2_bin_dir }}/rke2"
-    warn: false
   when: "'master' in group_names"
 
 - name: Install RKE2 agent (worker)
@@ -64,10 +68,8 @@
     /tmp/install-rke2.sh
   args:
     creates: "{{ rke2_bin_dir }}/rke2"
-    warn: false
   when: "'worker' in group_names"
 
-# Fetch token if empty
 - name: Fetch token from master if not defined
   fetch:
     src: /var/lib/rancher/rke2/server/node-token
@@ -81,7 +83,6 @@
     rke2_token: "{{ lookup('file','/tmp/master-node-token') }}"
   when: rke2_token == "" and "'worker' in group_names"
 
-# Deploy config.yaml
 - name: Deploy RKE2 config file
   template:
     src: config.yaml.j2
@@ -90,8 +91,8 @@
     group: root
     mode: 0600
 
-# Create systemd override
-- name: Create systemd override dirs
+# Systemd override
+- name: Create systemd override directories
   file:
     path: "{{ rke2_systemd_dir }}/{{ item }}.d"
     state: directory
@@ -124,11 +125,9 @@
       StandardError=append:{{ rke2_log_dir }}/agent.log
   when: "'worker' in group_names"
 
-# Reload systemd
 - name: Reload systemd
   command: systemctl daemon-reload
 
-# Enable & start services
 - name: Enable and start server
   systemd:
     name: rke2-server
@@ -143,7 +142,6 @@
     enabled: yes
   when: "'worker' in group_names"
 
-# Wait for services
 - name: Wait for rke2-server active
   command: systemctl is-active rke2-server
   register: server_status

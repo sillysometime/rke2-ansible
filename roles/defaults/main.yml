@@ -1,0 +1,9 @@
+---
+# Default vars (can be overridden in all.yml)
+rke2_version: "stable"
+rke2_channel: "stable"
+rke2_bin_dir: "/usr/local/bin"
+rke2_config_dir: "/etc/rancher/rke2"
+rke2_data_dir: "/var/lib/rancher/rke2"
+rke2_log_dir: "/var/log/rke2"
+rke2_systemd_dir: "/etc/systemd/system"
