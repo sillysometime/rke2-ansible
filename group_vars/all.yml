@@ -1,23 +1,8 @@
-# ========================
 # RKE2 Configuration
-# ========================
-rke2_version: "v1.31.6+rke2r1"
+rke2_version: "1.32.8+rke2r1"
 rke2_channel: "stable"
-rke2_token: ""  # wait master to generate token
 
-# ========================
-# Path Configuration
-# ========================
-rke2_bin_dir: "/opt/rke2/bin"
-rke2_tar_prefix: "/opt/rke2"
-rke2_systemd_dir: "/etc/systemd/system"
-rke2_config_dir: "/opt/rke2/etc/rke2"
-rke2_data_dir: "/opt/rke2/data/rke2"
-rke2_log_dir: "/opt/rke2/logs"
-
-# ========================
 # Network Configuration
-# ========================
 rke2_cluster_cidr: "10.42.0.0/16"
 rke2_service_cidr: "10.43.0.0/16"
 rke2_cluster_dns: "10.43.0.10"
@@ -26,4 +11,18 @@ rke2_cluster_dns: "10.43.0.10"
 system_timezone: "Asia/Bangkok"
 disable_swap: true
 configure_firewall: true
+enable_selinux: true
 
+# Paths
+rke2_bin_dir: "/usr/local/bin"
+rke2_config_dir: "/etc/rancher/rke2"
+rke2_data_dir: "/var/lib/rancher/rke2"
+rke2_log_dir: "/var/log/rke2"
+rke2_systemd_dir: "/etc/systemd/system"
+
+# Token (empty = fetch from master)
+rke2_token: ""
+
+# Logging rotation
+rke2_log_maxsize: "50M"
+rke2_log_maxfiles: 5
