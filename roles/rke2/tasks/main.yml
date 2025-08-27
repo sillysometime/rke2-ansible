@@ -1,0 +1,19 @@
+---
+- name: Include prerequisites tasks
+  include_tasks: prerequisites.yml
+
+- name: Install RKE2 server (master)
+  include_tasks: install-master.yml
+  when: rke2_type == "server"
+
+- name: Install RKE2 agent (worker)
+  include_tasks: install-worker.yml
+  when: rke2_type == "agent"
+
+- name: Wait for RKE2 to be ready
+  wait_for:
+    port: "{{ '6443' if rke2_type == 'server' else '10250' }}"
+    host: "{{ ansible_default_ipv4.address }}"
+    delay: 30
+    timeout: 300
+  when: rke2_type in ['server', 'agent']
